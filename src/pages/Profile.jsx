@@ -8,7 +8,6 @@ import { db } from "../firebase";
 const Profile = () => {
   const auth = getAuth();
   const navigate = useNavigate();
-  console.log("auth", auth);
 
   const [changeDetail, setChangeDetail] = useState(false);
   const [formData, setFormData] = useState({
