@@ -2,20 +2,22 @@ import React, { useState } from "react";
 import Spinner from "../components/Spinner";
 import { toast } from "react-toastify";
 import { getAuth } from "firebase/auth";
-import {
-  getDownloadURL,
-  getStorage,
-  ref,
-  uploadBytesResumable,
-} from "firebase/storage";
-import { v4 as uuidv4 } from "uuid";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router";
 import { db } from "../firebase";
 
+// import {
+//   getDownloadURL,
+//   getStorage,
+//   ref,
+//   uploadBytesResumable,
+// } from "firebase/storage";
+// import { v4 as uuidv4 } from "uuid";
+
 const CreateListing = () => {
   const auth = getAuth();
   const navigate = useNavigate();
+  // eslint-disable-next-line no-unused-vars
   const [geolocationEnabled, setGeolocationEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
