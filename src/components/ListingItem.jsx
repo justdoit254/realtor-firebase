@@ -2,9 +2,10 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { imagesUrl } from "../assets/imagesUrl";
 import { useFromNow } from "../hooks/useFromNow";
-import { MdLocationOn } from "react-icons/md";
+import { MdEdit, MdLocationOn } from "react-icons/md";
+import { FaTrash } from "react-icons/fa";
 
-const ListingItem = ({ listing, id }) => {
+const ListingItem = ({ listing, id, onDelete, onEdit }) => {
   const {
     type,
     timestamp,
@@ -58,6 +59,18 @@ const ListingItem = ({ listing, id }) => {
           </div>
         </div>
       </Link>
+      {onDelete && (
+        <FaTrash
+          className="absolute bottom-2 right-2 h-[14px] cursor-pointer text-red-500"
+          onClick={() => onDelete(id)}
+        />
+      )}
+      {onEdit && (
+        <MdEdit
+          className="absolute bottom-2 right-7 h-4 cursor-pointer "
+          onClick={() => onEdit(id)}
+        />
+      )}
     </li>
   );
 };
