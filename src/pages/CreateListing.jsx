@@ -330,6 +330,7 @@ const CreateListing = () => {
                 value={latitude}
                 onChange={onChange}
                 required
+                step="0.01"
                 min="-90"
                 max="90"
                 className="w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition duration-150 ease-in-out focus:bg-white focus:text-gray-700 focus:border-slate-600 text-center"
@@ -343,6 +344,7 @@ const CreateListing = () => {
                 value={longitude}
                 onChange={onChange}
                 required
+                step="0.01"
                 min="-180"
                 max="180"
                 className="w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition duration-150 ease-in-out focus:bg-white focus:text-gray-700 focus:border-slate-600 text-center"
@@ -394,7 +396,7 @@ const CreateListing = () => {
               value={regularPrice}
               onChange={onChange}
               min="50"
-              max="40000000"
+              max="400000000"
               required
               className="px-4 py-2 text-xl text-gray-700 bg-white border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center"
             />
@@ -413,7 +415,7 @@ const CreateListing = () => {
                 value={discountedPrice}
                 onChange={onChange}
                 min="50"
-                max="40000000"
+                max="400000000"
                 required={offer}
                 className="px-4 py-2 text-xl text-gray-700 bg-white border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center"
               />
