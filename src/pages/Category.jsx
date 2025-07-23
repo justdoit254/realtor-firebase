@@ -11,11 +11,12 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import ListingItem from "../components/ListingItem";
 
-const Offers = () => {
+const Category = () => {
   const navigate = useNavigate();
+  const { categoryName } = useParams();
 
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +28,7 @@ const Offers = () => {
         const listingRef = collection(db, "listings");
         const queryForData = query(
           listingRef,
-          where("offer", "==", true),
+          where("type", "==", categoryName),
           orderBy("timestamp", "desc"),
           limit(8)
         );
@@ -49,14 +50,14 @@ const Offers = () => {
         setLoading(false);
       }
     })();
-  }, [navigate]);
+  }, [navigate, categoryName]);
 
   const onFetchMoreListings = async () => {
     try {
       const listingRef = collection(db, "listings");
       const queryForData = query(
         listingRef,
-        where("offer", "==", true),
+        where("type", "==", categoryName),
         orderBy("timestamp", "desc"),
         startAfter(lastFetchedListing),
         limit(4)
@@ -81,7 +82,9 @@ const Offers = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-3">
-      <h1 className="text-3xl text-center mt-6 font-bold mb-6">Offers</h1>
+      <h1 className="text-3xl text-center mt-6 font-bold mb-6">
+        {categoryName === "rent" ? "Places for rent" : "Places for sale"}
+      </h1>
       {loading ? (
         <Spinner />
       ) : listings?.length > 0 ? (
@@ -115,4 +118,4 @@ const Offers = () => {
   );
 };
 
-export default Offers;
+export default Category;
