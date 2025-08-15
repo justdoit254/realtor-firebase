@@ -6,6 +6,5 @@ import firebaseConfig from "./config";
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Initialize Firebase
-console.log("Google API Key:", firebaseConfig); // for Vite
 initializeApp(firebaseConfig);
 export const db = getFirestore()
