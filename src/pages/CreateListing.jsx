@@ -5,6 +5,11 @@ import { getAuth } from "firebase/auth";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router";
 import { db } from "../firebase";
+import firebaseConfig from "../config";
+import UploadWidget from "../components/UploadWidget";
+import { AdvancedImage, placeholder, responsive } from "@cloudinary/react";
+import { Cloudinary } from "@cloudinary/url-gen";
+import { appConfig } from "../config";
 
 // import {
 //   getDownloadURL,
@@ -19,6 +24,7 @@ const CreateListing = () => {
   const navigate = useNavigate();
   // eslint-disable-next-line no-unused-vars
   const [geolocationEnabled, setGeolocationEnabled] = useState(false);
+  const [publicId, setPublicId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     type: "rent",
@@ -35,6 +41,15 @@ const CreateListing = () => {
     latitude: 0,
     longitude: 0,
     images: {},
+  });
+
+  // Cloudinary configuration
+  const { cloudName } = appConfig;
+
+  const cld = new Cloudinary({
+    cloud: {
+      cloudName,
+    },
   });
 
   const {
@@ -98,7 +113,7 @@ const CreateListing = () => {
     let location;
     if (geolocationEnabled) {
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${firebaseConfig.apiKey}`
       );
       const data = await response.json();
       console.log(data);
@@ -191,10 +206,51 @@ const CreateListing = () => {
     }
   };
 
+  function handleOnUpload(error, result, widget) {
+    console.log("widget", widget);
+
+    if (error) {
+      // updateError(error);
+      console.log({ error });
+
+      widget.close({
+        quiet: true,
+      });
+      return;
+    }
+    console.log(result);
+
+    setPublicId(result.info.public_id);
+    setFormData((prevState) => ({
+      ...prevState,
+      images: result?.info?.secure_url,
+    }));
+  }
+
+  const deleteImage = async (publicId) => {
+    setPublicId("");
+    setFormData((prevState) => ({
+      ...prevState,
+      images: {},
+    }));
+
+    try {
+      await fetch("/api/deleteImage", {
+        method: "POST",
+        headers: {
+          "Content-type": "application/json",
+        },
+        body: JSON.stringify({ publicId }),
+      });
+    } catch (error) {
+      console.error("Failed to delete image", error);
+    }
+  };
+
   return loading ? (
     <Spinner />
   ) : (
-    <main className="max-w-md px-2 mx-auto bg-red-100">
+    <main className="max-w-lg px-10 py-2 mx-auto bg-red-100">
       <h1 className="text-3xl text-center mt-6 font-bold">Create a Listing</h1>
       <form onSubmit={onSubmit}>
         <p className="text-lg mt-6 font-semibold">Sell / Rent</p>
@@ -398,7 +454,7 @@ const CreateListing = () => {
               value={regularPrice}
               onChange={onChange}
               min="50"
-              max="400000000"
+              max="4000000000"
               required
               className="px-4 py-2 text-xl text-gray-700 bg-white border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center"
             />
@@ -417,7 +473,7 @@ const CreateListing = () => {
                 value={discountedPrice}
                 onChange={onChange}
                 min="50"
-                max="400000000"
+                max="4000000000"
                 required={offer}
                 className="px-4 py-2 text-xl text-gray-700 bg-white border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center"
               />
@@ -432,7 +488,37 @@ const CreateListing = () => {
           <p className="text-gray-600">
             The first image will be the cover (max 6)
           </p>
-          <input
+          <UploadWidget onUpload={handleOnUpload}>
+            {({ open }) => {
+              function handleOnClick(e) {
+                e.preventDefault();
+                open();
+              }
+              return <button onClick={handleOnClick}>Upload an Image</button>;
+            }}
+          </UploadWidget>
+          {publicId && (
+            <div
+              style={{ width: "800px", margin: "20px auto" }}
+              className="max-w-20"
+            >
+              <AdvancedImage
+                style={{ maxWidth: "100%" }}
+                cldImg={cld.image(publicId)}
+                plugins={[responsive(), placeholder()]}
+              />
+              <div
+                onClick={() => deleteImage(publicId)}
+                className="cursor-pointer"
+              >
+                Delete
+              </div>
+            </div>
+          )}
+          {/* <div onClick={() => deleteImage(publicId)} className="cursor-pointer">
+            Delete
+          </div> */}
+          {/* <input
             type="file"
             id="images"
             onChange={onChange}
@@ -440,7 +526,7 @@ const CreateListing = () => {
             multiple
             required
             className="w-full px-3 py-1.5 text-xl text-gray-700 bg-white border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center"
-          />
+          /> */}
         </div>
         <button
           type="submit"
