@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { getAuth, updateProfile } from "firebase/auth";
 import { useNavigate } from "react-router";
 import { toast } from "react-toastify";
@@ -13,23 +13,41 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import { FcHome } from "react-icons/fc";
 import { Link } from "react-router-dom";
 import ListingItem from "../components/ListingItem";
+import { 
+  FiMail, 
+  FiEdit2, 
+  FiCheck, 
+  FiLogOut, 
+  FiPlus,
+  FiHome,
+  FiGrid,
+  FiX
+} from "react-icons/fi";
 
 const Profile = () => {
   const auth = getAuth();
   const navigate = useNavigate();
+  const nameInputRef = useRef(null);
 
-  const [changeDetail, setChangeDetail] = useState(false);
-  const [formData, setFormData] = useState({
-    name: auth.currentUser.displayName,
-    email: auth.currentUser.email,
-  });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(auth.currentUser.displayName || "");
   const [listings, setListings] = useState(null);
   const [listingsLoading, setListingsLoading] = useState(false);
 
-  const { name, email } = formData;
+  const name = auth.currentUser.displayName;
+  const email = auth.currentUser.email;
+
+  const getInitials = (name) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   useEffect(() => {
     const fetchUserListing = async () => {
@@ -63,36 +81,55 @@ const Profile = () => {
     fetchUserListing();
   }, [auth.currentUser.uid]);
 
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditing]);
+
   const onLogOut = () => {
     auth.signOut();
     navigate("/");
   };
 
-  const onChange = (e) => {
-    setFormData((prevState) => ({
-      ...prevState,
-      [e.target.id]: e.target.value,
-    }));
+  const startEditing = () => {
+    setEditName(name || "");
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditName(name || "");
+    setIsEditing(false);
   };
 
   const onSubmit = async () => {
+    if (!editName.trim()) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+
     try {
-      //update display name in firebase auth
-      if (auth.currentUser.displayName !== name) {
-        await updateProfile(auth.currentUser, { displayName: name });
+      if (name !== editName) {
+        await updateProfile(auth.currentUser, { displayName: editName });
+        const docRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(docRef, { name: editName });
+        toast.success("Profile updated successfully");
       }
-
-      //update name in the firestore
-      const docRef = doc(db, "users", auth.currentUser.uid);
-      await updateDoc(docRef, { name }); //Make name a compulsory field in sign-in
-      // auth.currentUser.displayName
-      //   ? await updateDoc(docRef, { name })
-      //   : await setDoc(docRef, { name });
-
-      toast.success("Profile details update");
+      setIsEditing(false);
     } catch (error) {
       console.error(error);
       toast.error("Could not update profile details");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onSubmit();
+    } else if (e.key === "Escape") {
+      cancelEditing();
     }
   };
 
@@ -111,82 +148,182 @@ const Profile = () => {
   };
 
   return (
-    <>
-      <section className="max-w-6xl mx-auto flex  flex-col justify-center items-center">
-        <h1 className="text-3xl text-center mt-6 font-bold">My Profile</h1>
-        <div className="w-full md:w-[50%] mt-6 px-3">
-          <form>
-            <input
-              type="text"
-              id="name"
-              value={name}
-              disabled={!changeDetail}
-              onChange={onChange}
-              className={`w-full px-4 py-2 mb-6 text-xl text-gray-700 bg-white border border-gray-300 rounded transition ease-in-out ${
-                changeDetail && "bg-red-200 focus:bg-red-200"
-              }`}
-            />
-            <input
-              type="email"
-              id="email"
-              value={email}
-              disabled
-              className="w-full px-4 py-2 mb-6 text-xl text-gray-700 bg-white border border-gray-300 rounded transition ease-in-out"
-            />
-            <div className="flex justify-between whitespace-nowrap text-sm sm:text-lg mb-6">
-              <p className="flex items-center">
-                Do you want to change your name?
-                <span
-                  className="text-red-600 hover:text-red-700 transition ease-in-out duration-200 ml-1 cursor-pointer"
-                  onClick={() => {
-                    changeDetail && onSubmit();
-                    setChangeDetail((prevState) => !prevState);
-                  }}
-                >
-                  {changeDetail ? "Apply change" : "Edit"}
-                </span>
-              </p>
-              <p
-                className="text-blue-600 hover:text-blue-800 transition ease-in-out duration-200 cursor-pointer"
-                onClick={onLogOut}
-              >
-                Sign out
-              </p>
+    <main className="min-h-screen bg-surface-50">
+      <div className="max-w-6xl mx-auto px-4 py-8 lg:py-10">
+        
+        {/* Page Header */}
+        {/* <div className="max-w-xl mx-auto mb-6 animate-fade-in">
+          <h1 className="text-2xl font-bold text-ink">My Profile</h1>
+          <p className="text-sm text-ink-muted mt-1">Manage your account and listings</p>
+        </div> */}
+
+        {/* Profile Card */}
+        <div className="max-w-xl mx-auto mb-10 animate-fade-in-up">
+          <div className="card-elevated">
+            {/* Profile Display */}
+            <div className="flex items-start gap-4">
+              {/* Avatar */}
+              <div className="flex-shrink-0 w-16 h-16 rounded-full bg-ink text-white text-xl font-bold flex items-center justify-center shadow-soft">
+                {getInitials(isEditing ? editName : name)}
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                {/* Name - Display or Edit Mode */}
+                {isEditing ? (
+                  <div className="mb-2">
+                    <div className="relative">
+                      <input
+                        ref={nameInputRef}
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Enter your name"
+                        className="w-full text-md font-semibold text-ink bg-amber-50 border-2 border-amber-400 rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                      />
+                      <span className="absolute -top-2 left-2 px-1.5 bg-amber-50 text-xs font-medium text-amber-700">
+                        Editing
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-muted mt-1 ml-1">
+                      Press Enter to save, Escape to cancel
+                    </p>
+                  </div>
+                ) : (
+                  <h2 className="text-xl font-semibold text-ink truncate mb-1">
+                    {name || "Welcome"}
+                  </h2>
+                )}
+                
+                {/* Email - Always Display */}
+                <div className="flex items-center gap-2 text-ink-muted">
+                  <FiMail className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm truncate">{email}</span>
+                </div>
+              </div>
+
+              {/* Edit/Save/Cancel Buttons */}
+              <div className="flex-shrink-0">
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelEditing}
+                      className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-100 transition-colors"
+                      title="Cancel"
+                    >
+                      <FiX className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSubmit}
+                      className="p-2 rounded-lg bg-ink text-white hover:bg-ink/90 transition-colors"
+                      title="Save"
+                    >
+                      <FiCheck className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-100 transition-colors"
+                    title="Edit name"
+                  >
+                    <FiEdit2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
             </div>
-          </form>
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white uppercase px-7 py-3 text-sm font-medium rounded shadow-sm hover:bg-blue-700 transition duration-200 ease-in-out hover:shadow-lg active:bg-blue-800"
-          >
-            <Link
-              to="/create-listing"
-              className="flex justify-center items-center"
-            >
-              <FcHome className="mr-2 text-3xl bg-red-200 rounded-full p-1 border-2" />{" "}
-              Sell or rent your home
+
+            <div className="divider !my-5" />
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link to="/create-listing" className="flex-1">
+                <button type="button" className="btn-primary w-full">
+                  <FiPlus className="w-5 h-5" />
+                  Create Listing
+                </button>
+              </Link>
+              <button
+                type="button"
+                onClick={onLogOut}
+                className="btn-secondary flex-1 sm:flex-none"
+              >
+                <FiLogOut className="w-5 h-5" />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Listings Section */}
+        {!listingsLoading && listings?.length > 0 && (
+          <section className="animate-fade-in-up">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl lg:text-2xl font-bold text-ink flex items-center gap-2">
+                  <FiHome className="w-6 h-6" />
+                  My Listings
+                </h2>
+                <p className="text-ink-muted text-sm mt-1">
+                  {listings.length} {listings.length === 1 ? "property" : "properties"} listed
+                </p>
+              </div>
+              <Link 
+                to="/create-listing"
+                className="btn-ghost text-ink-muted hover:text-ink"
+              >
+                <FiPlus className="w-4 h-4" />
+                Add New
+              </Link>
+            </div>
+
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {listings.map((listing) => (
+                <ListingItem
+                  key={listing.id}
+                  id={listing.id}
+                  listing={listing.data}
+                  onDelete={(id) => onDelete(id)}
+                  onEdit={(id) => onEdit(id)}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Empty State */}
+        {!listingsLoading && listings?.length === 0 && (
+          <section className="text-center py-16 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-100 text-ink-muted mb-4">
+              <FiGrid className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-semibold text-ink mb-2">No listings yet</h3>
+            <p className="text-ink-muted mb-6 max-w-sm mx-auto">
+              Start by creating your first property listing to showcase it to potential buyers or renters.
+            </p>
+            <Link to="/create-listing">
+              <button type="button" className="btn-primary">
+                <FiPlus className="w-5 h-5" />
+                Create Your First Listing
+              </button>
             </Link>
-          </button>
-        </div>
-      </section>
-      {!listingsLoading && listings?.length > 0 && (
-        <div className="max-w-6xl px-3 my-6 mx-auto">
-          <h2 className="text-2xl text-center font-semibold mb-6">
-            My Listings
-          </h2>
-          <ul className="sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {listings.map((listing) => (
-              <ListingItem
-                key={listing.id}
-                id={listing.id}
-                listing={listing.data}
-                onDelete={(id) => onDelete(id)}
-                onEdit={(id) => onEdit(id)}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-    </>
+          </section>
+        )}
+
+        {/* Loading State */}
+        {listingsLoading && (
+          <section className="py-16">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className="w-8 h-8 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+              <p className="text-ink-muted">Loading your listings...</p>
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
   );
 };
 
