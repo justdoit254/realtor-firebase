@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { getAuth, updateProfile } from "firebase/auth";
 import { useNavigate } from "react-router";
 import { toast } from "react-toastify";
@@ -16,31 +16,29 @@ import { db } from "../firebase";
 import { Link } from "react-router-dom";
 import ListingItem from "../components/ListingItem";
 import { 
-  FiUser, 
   FiMail, 
   FiEdit2, 
   FiCheck, 
   FiLogOut, 
   FiPlus,
   FiHome,
-  FiGrid
+  FiGrid,
+  FiX
 } from "react-icons/fi";
 
 const Profile = () => {
   const auth = getAuth();
   const navigate = useNavigate();
+  const nameInputRef = useRef(null);
 
-  const [changeDetail, setChangeDetail] = useState(false);
-  const [formData, setFormData] = useState({
-    name: auth.currentUser.displayName,
-    email: auth.currentUser.email,
-  });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(auth.currentUser.displayName || "");
   const [listings, setListings] = useState(null);
   const [listingsLoading, setListingsLoading] = useState(false);
 
-  const { name, email } = formData;
+  const name = auth.currentUser.displayName;
+  const email = auth.currentUser.email;
 
-  // Get user initials for avatar
   const getInitials = (name) => {
     if (!name) return "U";
     return name
@@ -83,31 +81,55 @@ const Profile = () => {
     fetchUserListing();
   }, [auth.currentUser.uid]);
 
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditing]);
+
   const onLogOut = () => {
     auth.signOut();
     navigate("/");
   };
 
-  const onChange = (e) => {
-    setFormData((prevState) => ({
-      ...prevState,
-      [e.target.id]: e.target.value,
-    }));
+  const startEditing = () => {
+    setEditName(name || "");
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditName(name || "");
+    setIsEditing(false);
   };
 
   const onSubmit = async () => {
+    if (!editName.trim()) {
+      toast.error("Name cannot be empty");
+      return;
+    }
+
     try {
-      if (auth.currentUser.displayName !== name) {
-        await updateProfile(auth.currentUser, { displayName: name });
+      if (name !== editName) {
+        await updateProfile(auth.currentUser, { displayName: editName });
+        const docRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(docRef, { name: editName });
+        toast.success("Profile updated successfully");
       }
-
-      const docRef = doc(db, "users", auth.currentUser.uid);
-      await updateDoc(docRef, { name });
-
-      toast.success("Profile updated successfully");
+      setIsEditing(false);
     } catch (error) {
       console.error(error);
       toast.error("Could not update profile details");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onSubmit();
+    } else if (e.key === "Escape") {
+      cancelEditing();
     }
   };
 
@@ -138,83 +160,81 @@ const Profile = () => {
         {/* Profile Card */}
         <div className="max-w-xl mx-auto mb-10 animate-fade-in-up">
           <div className="card-elevated">
-            {/* Profile Header - Compact with Avatar */}
-            <div className="flex items-center gap-4 mb-6">
+            {/* Profile Display */}
+            <div className="flex items-start gap-4">
               {/* Avatar */}
-              <div className="flex-shrink-0 w-14 h-14 rounded-full bg-ink text-white text-lg font-bold flex items-center justify-center shadow-soft">
-                {getInitials(name)}
+              <div className="flex-shrink-0 w-16 h-16 rounded-full bg-ink text-white text-xl font-bold flex items-center justify-center shadow-soft">
+                {getInitials(isEditing ? editName : name)}
               </div>
+              
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-ink truncate">
-                  {name || "Welcome"}
-                </h2>
-                <p className="text-sm text-ink-muted truncate">{email}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  changeDetail && onSubmit();
-                  setChangeDetail((prevState) => !prevState);
-                }}
-                className={`btn-ghost flex-shrink-0 ${changeDetail ? "text-success" : "text-ink-muted"}`}
-              >
-                {changeDetail ? (
-                  <>
-                    <FiCheck className="w-4 h-4" />
-                    Save
-                  </>
+                {/* Name - Display or Edit Mode */}
+                {isEditing ? (
+                  <div className="mb-2">
+                    <div className="relative">
+                      <input
+                        ref={nameInputRef}
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Enter your name"
+                        className="w-full text-md font-semibold text-ink bg-amber-50 border-2 border-amber-400 rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                      />
+                      <span className="absolute -top-2 left-2 px-1.5 bg-amber-50 text-xs font-medium text-amber-700">
+                        Editing
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-muted mt-1 ml-1">
+                      Press Enter to save, Escape to cancel
+                    </p>
+                  </div>
                 ) : (
-                  <>
-                    <FiEdit2 className="w-4 h-4" />
-                    Edit
-                  </>
+                  <h2 className="text-xl font-semibold text-ink truncate mb-1">
+                    {name || "Welcome"}
+                  </h2>
                 )}
-              </button>
+                
+                {/* Email - Always Display */}
+                <div className="flex items-center gap-2 text-ink-muted">
+                  <FiMail className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm truncate">{email}</span>
+                </div>
+              </div>
+
+              {/* Edit/Save/Cancel Buttons */}
+              <div className="flex-shrink-0">
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelEditing}
+                      className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-100 transition-colors"
+                      title="Cancel"
+                    >
+                      <FiX className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSubmit}
+                      className="p-2 rounded-lg bg-ink text-white hover:bg-ink/90 transition-colors"
+                      title="Save"
+                    >
+                      <FiCheck className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-100 transition-colors"
+                    title="Edit name"
+                  >
+                    <FiEdit2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="divider !my-4" />
-
-            <form className="space-y-4">
-              {/* Name Field */}
-              <div>
-                <label htmlFor="name" className="form-label">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-                  <input
-                    type="text"
-                    id="name"
-                    value={name}
-                    disabled={!changeDetail}
-                    onChange={onChange}
-                    className={`form-input-base pl-10 py-2.5 ${
-                      changeDetail 
-                        ? "bg-accent-subtle border-ink focus:border-ink" 
-                        : "bg-surface-50 cursor-not-allowed"
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Email Field */}
-              <div>
-                <label htmlFor="email" className="form-label">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    disabled
-                    className="form-input-base pl-10 py-2.5 bg-surface-50 cursor-not-allowed"
-                  />
-                </div>
-                <p className="form-helper">Email cannot be changed</p>
-              </div>
-            </form>
 
             <div className="divider !my-5" />
 
