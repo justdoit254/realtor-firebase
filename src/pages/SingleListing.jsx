@@ -1,37 +1,27 @@
 import { doc, getDoc } from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router";
 import { db } from "../firebase";
 import Spinner from "../components/Spinner";
-import SwiperCore from "swiper";
-import { Autoplay, EffectFade, Navigation, Pagination } from "swiper/modules";
-import { Swiper, SwiperSlide } from "swiper/react";
-import "swiper/css/bundle";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import {
   FiShare2,
   FiMapPin,
   FiCalendar,
-  FiGrid,
   FiHome,
-  FiDollarSign,
-  FiCheck,
-  FiX,
   FiDroplet,
   FiZap,
-  FiWind,
   FiEye,
   FiShield,
-  FiFileText,
-  FiLayers,
   FiMaximize,
   FiChevronLeft,
   FiChevronRight,
+  FiGrid,
 } from "react-icons/fi";
-import { FaBed, FaBath, FaParking, FaChair, FaSwimmingPool, FaDumbbell } from "react-icons/fa";
-import { PiPlant } from "react-icons/pi";
+import { FaBed, FaBath, FaParking, FaCouch, FaSwimmingPool, FaDumbbell, FaTree } from "react-icons/fa";
+import { MdKitchen } from "react-icons/md";
+import { TbAirConditioning } from "react-icons/tb";
 import {
-  CURRENCIES,
   PROPERTY_TYPES,
   FLOORING_OPTIONS,
   KITCHEN_FEATURES,
@@ -60,21 +50,14 @@ const getLabelsFromValues = (options, values) => {
 };
 
 // Cloudinary image optimization helper
-// Transforms Cloudinary URLs to use optimal format (WebP for supported browsers)
 const optimizeCloudinaryUrl = (url, options = {}) => {
   if (!url) return null;
   
-  const { width = 1200, quality = "auto" } = options;
+  const { width = 1200, quality = "auto", fit = "fill" } = options;
   
-  // Check if it's a Cloudinary URL
   if (url.includes("cloudinary.com")) {
-    // Insert transformation parameters before /upload/
-    // f_auto: auto format (WebP for supported browsers, else best alternative)
-    // q_auto: auto quality optimization
-    // w_: width for responsive sizing
-    const transformations = `f_auto,q_${quality},w_${width}`;
+    const transformations = `f_auto,q_${quality},w_${width},c_${fit}`;
     
-    // Handle URLs with or without existing transformations
     if (url.includes("/upload/")) {
       return url.replace("/upload/", `/upload/${transformations}/`);
     }
@@ -83,25 +66,14 @@ const optimizeCloudinaryUrl = (url, options = {}) => {
   return url;
 };
 
-// Get optimized image URL with srcset for responsive images
-const getOptimizedImageSrcSet = (url) => {
-  if (!url || !url.includes("cloudinary.com")) return null;
-  
-  const sizes = [400, 800, 1200, 1600];
-  return sizes
-    .map((w) => `${optimizeCloudinaryUrl(url, { width: w })} ${w}w`)
-    .join(", ");
-};
-
 const SingleListing = () => {
   const { listingId } = useParams();
 
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
-  // const [activeImageIndex, setActiveImageIndex] = useState(0);
-
-  SwiperCore.use([Autoplay, Navigation, Pagination]);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const thumbnailContainerRef = useRef(null);
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -135,7 +107,7 @@ const SingleListing = () => {
   if (!listing) {
     return (
       <main className="min-h-screen bg-surface-50 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center px-4">
           <FiHome className="w-16 h-16 text-ink-muted mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-ink mb-2">Listing Not Found</h1>
           <p className="text-ink-muted">The property you're looking for doesn't exist or has been removed.</p>
@@ -144,7 +116,7 @@ const SingleListing = () => {
     );
   }
 
-  // Destructure listing data with defaults
+  // Destructure listing data
   const {
     type = "rent",
     name = "Untitled Property",
@@ -202,13 +174,20 @@ const SingleListing = () => {
     return parts.join(", ") || "Location not specified";
   };
 
-  // Format price with currency symbol
+  // Short address for display
+  const getShortAddress = () => {
+    if (typeof address === "string") return address;
+    const parts = [address.city, address.state, address.country].filter(Boolean);
+    return parts.join(", ") || "Location not specified";
+  };
+
+  // Format price
   const formatPrice = (amount) => {
     const symbol = CURRENCY_SYMBOLS[currency] || "₹";
     return `${symbol}${Number(amount).toLocaleString()}`;
   };
 
-  // Get all images for gallery
+  // Get all images
   const getAllImages = () => {
     const images = [];
     if (mainPhoto?.url) {
@@ -228,490 +207,407 @@ const SingleListing = () => {
   const hasImages = allImages.length > 0;
   const hasCoordinates = geolocation?.lat && geolocation?.lng;
 
-  // Section component for consistent styling
-  const Section = ({ icon: Icon, title, children, className = "" }) => (
-    <section className={`${className}`}>
-      <h3 className="flex items-center gap-2 text-lg font-semibold text-ink mb-4">
-        {Icon && <Icon className="w-5 h-5" />}
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
+  // Image navigation
+  const goToImage = (index) => {
+    setActiveImageIndex(index);
+    // Scroll thumbnail into view
+    if (thumbnailContainerRef.current) {
+      const thumbnails = thumbnailContainerRef.current.children;
+      if (thumbnails[index]) {
+        thumbnails[index].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    }
+  };
 
-  // Info row component
-  const InfoRow = ({ label, value, icon: Icon }) => {
+  const nextImage = () => {
+    const newIndex = activeImageIndex < allImages.length - 1 ? activeImageIndex + 1 : 0;
+    goToImage(newIndex);
+  };
+
+  const prevImage = () => {
+    const newIndex = activeImageIndex > 0 ? activeImageIndex - 1 : allImages.length - 1;
+    goToImage(newIndex);
+  };
+
+  // Collect all available amenities/features
+  const getAmenities = () => {
+    const amenities = [];
+    if (parking) amenities.push({ icon: FaParking, label: "Parking" });
+    if (furnished) amenities.push({ icon: FaCouch, label: "Furnished" });
+    if (yardGarden) amenities.push({ icon: FaTree, label: "Yard/Garden" });
+    if (gym) amenities.push({ icon: FaDumbbell, label: "Gym" });
+    if (pool) amenities.push({ icon: FaSwimmingPool, label: "Pool" });
+    if (cooling) amenities.push({ icon: TbAirConditioning, label: getLabelFromValue(COOLING_OPTIONS, cooling) });
+    if (kitchenFeatures?.length > 0) amenities.push({ icon: MdKitchen, label: "Modern Kitchen" });
+    return amenities;
+  };
+
+  const amenities = getAmenities();
+
+  // Detail item component
+  const DetailItem = ({ icon, label, value }) => {
     if (!value && value !== 0) return null;
+    const Icon = icon
     return (
-      <div className="flex items-start gap-3 py-2">
-        {Icon && <Icon className="w-4 h-4 text-ink-muted mt-0.5 flex-shrink-0" />}
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-ink-muted">{label}</span>
-          <p className="text-ink font-medium">{value}</p>
-        </div>
+      <div className="flex items-center gap-3 text-ink-muted">
+        <Icon className="w-4 h-4 flex-shrink-0" />
+        <span className="text-sm">{label}:</span>
+        <span className="text-sm font-medium text-ink">{value}</span>
       </div>
     );
   };
 
-  // Feature badge component
-  const FeatureBadge = ({ active, label, icon: Icon }) => (
-    <div
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-        active
-          ? "bg-success/10 text-success"
-          : "bg-surface-100 text-ink-muted"
-      }`}
-    >
-      {Icon && <Icon className="w-4 h-4" />}
-      <span>{label}</span>
-      {active ? (
-        <FiCheck className="w-4 h-4 ml-auto" />
-      ) : (
-        <FiX className="w-4 h-4 ml-auto" />
-      )}
-    </div>
-  );
-
-  // Tag component for arrays
-  const Tag = ({ children }) => (
-    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-surface-100 text-ink">
-      {children}
-    </span>
-  );
-
   return (
-    <main className="min-h-screen bg-surface-50">
-      {/* Image Gallery Section */}
-      <div className="relative bg-ink">
+    <main className="min-h-screen bg-white">
+      {/* Image Gallery */}
+      <section className="relative bg-surface-100">
         {hasImages ? (
-          <Swiper
-            slidesPerView={1}
-            navigation={{
-              prevEl: ".swiper-button-prev-custom",
-              nextEl: ".swiper-button-next-custom",
-            }}
-            pagination={{ 
-              type: "fraction",
-              el: ".swiper-pagination-custom",
-            }}
-            effect="fade"
-            modules={[EffectFade, Navigation, Pagination]}
-            autoplay={{ delay: 4000 }}
-            // onSlideChange={(swiper) => setActiveImageIndex(swiper.activeIndex)}
-            className="relative"
-          >
-            {allImages.map((image, index) => (
-              <SwiperSlide key={index}>
-                <div className="relative w-full h-[300px] sm:h-[400px] lg:h-[500px]">
-                  <picture>
-                    <source
-                      type="image/webp"
-                      srcSet={getOptimizedImageSrcSet(image.url)}
-                      sizes="100vw"
-                    />
-                    <img
-                      src={optimizeCloudinaryUrl(image.url, { width: 1200 })}
-                      srcSet={getOptimizedImageSrcSet(image.url)}
-                      sizes="100vw"
-                      alt={`${name} - Image ${index + 1}`}
-                      className="w-full h-full object-cover"
-                      loading={index === 0 ? "eager" : "lazy"}
-                    />
-                  </picture>
-                  {/* Gradient overlay for better text visibility */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-ink/20" />
+          <div className="relative">
+            {/* Main Image */}
+            <div className="relative aspect-[16/10] sm:aspect-[16/8] lg:aspect-[16/7] max-h-[600px] overflow-hidden">
+              <img
+                src={optimizeCloudinaryUrl(allImages[activeImageIndex]?.url, { width: 1600, fit: "limit" })}
+                alt={`${name} - Image ${activeImageIndex + 1}`}
+                className="w-full h-full object-contain bg-surface-100"
+              />
+              
+              {/* Navigation Arrows */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    onClick={prevImage}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/95 hover:bg-white rounded-full shadow-lg transition-all hover:scale-105"
+                    aria-label="Previous image"
+                  >
+                    <FiChevronLeft className="w-5 h-5 text-ink" />
+                  </button>
+                  <button
+                    onClick={nextImage}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/95 hover:bg-white rounded-full shadow-lg transition-all hover:scale-105"
+                    aria-label="Next image"
+                  >
+                    <FiChevronRight className="w-5 h-5 text-ink" />
+                  </button>
+                </>
+              )}
+
+              {/* Image Counter */}
+              {allImages.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-ink/80 backdrop-blur-sm rounded-full">
+                  <span className="text-white text-sm font-medium">
+                    {activeImageIndex + 1} / {allImages.length}
+                  </span>
                 </div>
-              </SwiperSlide>
-            ))}
-            
-            {/* Custom Navigation */}
+              )}
+            </div>
+
+            {/* Thumbnails */}
             {allImages.length > 1 && (
-              <>
-                <button className="swiper-button-prev-custom absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-soft hover:bg-white transition-colors">
-                  <FiChevronLeft className="w-5 h-5 text-ink" />
-                </button>
-                <button className="swiper-button-next-custom absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-soft hover:bg-white transition-colors">
-                  <FiChevronRight className="w-5 h-5 text-ink" />
-                </button>
-                
-                {/* Custom Pagination */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-ink/70 backdrop-blur-sm rounded-full">
-                  <span className="swiper-pagination-custom text-white text-sm font-medium" />
+              <div className="bg-white border-t border-surface-200">
+                <div 
+                  ref={thumbnailContainerRef}
+                  className="flex gap-2 p-3 overflow-x-auto scrollbar-hide max-w-6xl mx-auto"
+                >
+                  {allImages.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => goToImage(index)}
+                      className={`relative flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden transition-all ${
+                        activeImageIndex === index
+                          ? "ring-2 ring-ink ring-offset-2"
+                          : "opacity-70 hover:opacity-100"
+                      }`}
+                    >
+                      <img
+                        src={optimizeCloudinaryUrl(image.url, { width: 160, fit: "fill" })}
+                        alt={`Thumbnail ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
                 </div>
-              </>
+              </div>
             )}
-          </Swiper>
+
+            {/* Share Button */}
+            <button
+              onClick={handleShare}
+              className="absolute top-4 right-4 p-3 bg-white/95 hover:bg-white rounded-full shadow-lg transition-all hover:scale-105"
+              aria-label="Share listing"
+            >
+              <FiShare2 className="w-5 h-5 text-ink" />
+            </button>
+
+            {/* Share Toast */}
+            {shareLinkCopied && (
+              <div className="absolute top-20 right-4 px-4 py-2 bg-ink text-white text-sm font-medium rounded-lg shadow-lg animate-fade-in">
+                Link copied!
+              </div>
+            )}
+
+            {/* Type Badge */}
+            <div className="absolute top-4 left-4">
+              <span className={`px-4 py-2 text-sm font-semibold rounded-full shadow-lg ${
+                type === "rent"
+                  ? "bg-blue-600 text-white"
+                  : "bg-emerald-600 text-white"
+              }`}>
+                For {type === "rent" ? "Rent" : "Sale"}
+              </span>
+            </div>
+          </div>
         ) : (
-          <div className="w-full h-[300px] sm:h-[400px] lg:h-[500px] bg-surface-200 flex items-center justify-center">
+          <div className="aspect-[16/9] max-h-[500px] bg-surface-200 flex items-center justify-center">
             <div className="text-center text-ink-muted">
               <FiHome className="w-16 h-16 mx-auto mb-2 opacity-50" />
               <p>No images available</p>
             </div>
           </div>
         )}
+      </section>
 
-        {/* Share Button */}
-        <button
-          onClick={handleShare}
-          className="absolute top-4 right-4 z-20 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-soft hover:bg-white transition-colors"
-          aria-label="Share listing"
-        >
-          <FiShare2 className="w-5 h-5 text-ink" />
-        </button>
-
-        {/* Share Copied Toast */}
-        {shareLinkCopied && (
-          <div className="absolute top-16 right-4 z-20 px-4 py-2 bg-success text-white text-sm font-medium rounded-lg shadow-lg animate-fade-in">
-            Link copied!
-          </div>
-        )}
-
-        {/* Type Badge */}
-        <span
-          className={`absolute top-4 left-4 z-20 px-4 py-2 text-sm font-semibold uppercase tracking-wide rounded-lg shadow-soft ${
-            type === "rent"
-              ? "bg-accent text-white"
-              : "bg-success text-white"
-          }`}
-        >
-          For {type === "rent" ? "Rent" : "Sale"}
-        </span>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-8 lg:py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Main Info */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Header Card */}
-            <div className="card-elevated animate-fade-in-up">
-              {/* Title & Price */}
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-2xl lg:text-3xl font-bold text-ink mb-2">
-                    {name}
-                  </h1>
-                  <div className="flex items-start gap-2 text-ink-muted">
-                    <FiMapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm">{formatFullAddress()}</p>
-                  </div>
-                </div>
-                <div className="flex-shrink-0 text-right">
-                  <p className="text-2xl lg:text-3xl font-bold text-ink">
-                    {formatPrice(price)}
-                  </p>
-                  {type === "rent" && (
-                    <span className="text-sm text-ink-muted">/month</span>
-                  )}
-                  {priceType === "negotiable" && (
-                    <span className="block text-xs text-accent font-medium mt-1">
-                      Negotiable
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="divider" />
-
-              {/* Quick Stats */}
-              <div className="flex flex-wrap items-center gap-6 py-2">
-                {propertyType && (
-                  <div className="flex items-center gap-2">
-                    <FiHome className="w-5 h-5 text-ink-muted" />
-                    <span className="text-sm font-medium text-ink">
-                      {getLabelFromValue(PROPERTY_TYPES, propertyType)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <FaBed className="w-5 h-5 text-ink-muted" />
-                  <span className="text-sm font-medium text-ink">
-                    {bedrooms} {bedrooms === 1 ? "Bedroom" : "Bedrooms"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FaBath className="w-5 h-5 text-ink-muted" />
-                  <span className="text-sm font-medium text-ink">
-                    {bathrooms} {bathrooms === 1 ? "Bathroom" : "Bathrooms"}
-                  </span>
-                </div>
-                {livingArea && (
-                  <div className="flex items-center gap-2">
-                    <FiMaximize className="w-5 h-5 text-ink-muted" />
-                    <span className="text-sm font-medium text-ink">
-                      {Number(livingArea).toLocaleString()} sq ft
-                    </span>
-                  </div>
-                )}
-                {yearBuilt && (
-                  <div className="flex items-center gap-2">
-                    <FiCalendar className="w-5 h-5 text-ink-muted" />
-                    <span className="text-sm font-medium text-ink">
-                      Built {yearBuilt}
-                    </span>
-                  </div>
-                )}
+      {/* Content */}
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* Header */}
+        <header className="mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <h1 className="text-2xl lg:text-3xl font-bold text-ink mb-2">{name}</h1>
+              <div className="flex items-center gap-2 text-ink-muted">
+                <FiMapPin className="w-4 h-4" />
+                <span>{getShortAddress()}</span>
               </div>
             </div>
+            <div className="lg:text-right">
+              <p className="text-3xl font-bold text-ink">{formatPrice(price)}</p>
+              <p className="text-ink-muted text-sm">
+                {type === "rent" ? "per month" : ""}
+                {priceType === "negotiable" && <span className="text-blue-600 ml-2">Negotiable</span>}
+              </p>
+            </div>
+          </div>
 
-            {/* Description */}
-            {description && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiFileText} title="Description">
-                  <p className="text-ink-muted leading-relaxed whitespace-pre-line">
-                    {description}
-                  </p>
-                </Section>
+          {/* Quick Stats */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 py-4 border-y border-surface-200">
+            {propertyType && (
+              <div className="flex items-center gap-2 text-ink">
+                <FiHome className="w-5 h-5 text-ink-muted" />
+                <span className="font-medium">{getLabelFromValue(PROPERTY_TYPES, propertyType)}</span>
               </div>
             )}
-
-            {/* Key Features */}
-            <div className="card-elevated animate-fade-in-up">
-              <Section icon={FiCheck} title="Key Features">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <FeatureBadge active={parking} label="Parking" icon={FaParking} />
-                  <FeatureBadge active={furnished} label="Furnished" icon={FaChair} />
-                  <FeatureBadge active={yardGarden} label="Yard/Garden" icon={PiPlant} />
-                  <FeatureBadge active={gym} label="Gym" icon={FaDumbbell} />
-                  <FeatureBadge active={pool} label="Pool" icon={FaSwimmingPool} />
-                </div>
-              </Section>
+            <div className="flex items-center gap-2 text-ink">
+              <FaBed className="w-5 h-5 text-ink-muted" />
+              <span className="font-medium">{bedrooms} {bedrooms === 1 ? "Bed" : "Beds"}</span>
             </div>
+            <div className="flex items-center gap-2 text-ink">
+              <FaBath className="w-5 h-5 text-ink-muted" />
+              <span className="font-medium">{bathrooms} {bathrooms === 1 ? "Bath" : "Baths"}</span>
+            </div>
+            {livingArea && (
+              <div className="flex items-center gap-2 text-ink">
+                <FiMaximize className="w-5 h-5 text-ink-muted" />
+                <span className="font-medium">{Number(livingArea).toLocaleString()} sq ft</span>
+              </div>
+            )}
+            {yearBuilt && (
+              <div className="flex items-center gap-2 text-ink">
+                <FiCalendar className="w-5 h-5 text-ink-muted" />
+                <span className="font-medium">Built {yearBuilt}</span>
+              </div>
+            )}
+          </div>
+        </header>
 
-            {/* Size & Layout */}
-            {(livingArea || stories || ceilingHeight || floorNumber || otherRooms) && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiGrid} title="Size & Layout">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          {/* Left Column - Details */}
+          <div className="lg:col-span-3 space-y-8">
+            {/* Description */}
+            {description && (
+              <section>
+                <h2 className="text-lg font-semibold text-ink mb-3">About this property</h2>
+                <p className="text-ink-muted leading-relaxed whitespace-pre-line">{description}</p>
+              </section>
+            )}
+
+            {/* Amenities */}
+            {amenities.length > 0 && (
+              <section>
+                <h2 className="text-lg font-semibold text-ink mb-4">What this place offers</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {amenities.map((amenity, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-surface-50 border border-surface-200"
+                    >
+                      <amenity.icon className="w-5 h-5 text-ink" />
+                      <span className="text-sm font-medium text-ink">{amenity.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Property Details */}
+            {(stories || ceilingHeight || floorNumber || otherRooms || flooring?.length > 0) && (
+              <section>
+                <h2 className="text-lg font-semibold text-ink mb-4">Property details</h2>
+                <div className="space-y-4">
+                  {/* Size Info */}
                   <div className="grid grid-cols-2 gap-4">
-                    {livingArea && (
-                      <InfoRow
-                        label="Living Area"
-                        value={`${Number(livingArea).toLocaleString()} sq ft`}
-                        icon={FiMaximize}
-                      />
-                    )}
-                    {stories && (
-                      <InfoRow
-                        label="Stories/Floors"
-                        value={stories}
-                        icon={FiLayers}
-                      />
-                    )}
-                    {ceilingHeight && (
-                      <InfoRow
-                        label="Ceiling Height"
-                        value={ceilingHeight}
-                      />
-                    )}
-                    {floorNumber && (
-                      <InfoRow
-                        label="Floor Number"
-                        value={floorNumber}
-                      />
-                    )}
+                    {stories && <DetailItem icon={FiGrid} label="Stories" value={stories} />}
+                    {ceilingHeight && <DetailItem icon={FiMaximize} label="Ceiling" value={ceilingHeight} />}
+                    {floorNumber && <DetailItem icon={FiGrid} label="Floor" value={floorNumber} />}
                   </div>
+
+                  {/* Other Rooms */}
                   {otherRooms && (
-                    <div className="mt-4 pt-4 border-t border-surface-200">
-                      <p className="text-sm text-ink-muted mb-2">Other Rooms</p>
+                    <div>
+                      <p className="text-sm text-ink-muted mb-1">Other rooms</p>
                       <p className="text-ink">{otherRooms}</p>
                     </div>
                   )}
-                </Section>
-              </div>
-            )}
 
-            {/* Interior Features */}
-            {(flooring?.length > 0 || kitchenFeatures?.length > 0 || cooling) && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiHome} title="Interior Features">
+                  {/* Flooring */}
                   {flooring?.length > 0 && (
-                    <div className="mb-4">
+                    <div>
                       <p className="text-sm text-ink-muted mb-2">Flooring</p>
                       <div className="flex flex-wrap gap-2">
                         {getLabelsFromValues(FLOORING_OPTIONS, flooring)?.map((label, i) => (
-                          <Tag key={i}>{label}</Tag>
+                          <span key={i} className="px-3 py-1 text-sm bg-surface-100 text-ink rounded-full">
+                            {label}
+                          </span>
                         ))}
                       </div>
                     </div>
                   )}
+
+                  {/* Kitchen Features */}
                   {kitchenFeatures?.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-sm text-ink-muted mb-2">Kitchen Features</p>
+                    <div>
+                      <p className="text-sm text-ink-muted mb-2">Kitchen features</p>
                       <div className="flex flex-wrap gap-2">
                         {getLabelsFromValues(KITCHEN_FEATURES, kitchenFeatures)?.map((label, i) => (
-                          <Tag key={i}>{label}</Tag>
+                          <span key={i} className="px-3 py-1 text-sm bg-surface-100 text-ink rounded-full">
+                            {label}
+                          </span>
                         ))}
                       </div>
                     </div>
                   )}
-                  {cooling && (
-                    <div>
-                      <p className="text-sm text-ink-muted mb-2">Cooling</p>
-                      <Tag>{getLabelFromValue(COOLING_OPTIONS, cooling)}</Tag>
-                    </div>
-                  )}
-                </Section>
-              </div>
+                </div>
+              </section>
             )}
 
-            {/* Utilities & Infrastructure */}
+            {/* Utilities */}
             {(plumbing || electrical || waterSource || accessibilityFeatures) && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiZap} title="Utilities & Infrastructure">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {plumbing && (
-                      <InfoRow label="Plumbing" value={plumbing} icon={FiDroplet} />
-                    )}
-                    {electrical && (
-                      <InfoRow label="Electrical" value={electrical} icon={FiZap} />
-                    )}
-                    {waterSource && (
-                      <InfoRow label="Water Source" value={waterSource} icon={FiDroplet} />
-                    )}
-                    {accessibilityFeatures && (
-                      <InfoRow label="Accessibility" value={accessibilityFeatures} />
-                    )}
-                  </div>
-                </Section>
-              </div>
+              <section>
+                <h2 className="text-lg font-semibold text-ink mb-4">Utilities & Infrastructure</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {plumbing && <DetailItem icon={FiDroplet} label="Plumbing" value={plumbing} />}
+                  {electrical && <DetailItem icon={FiZap} label="Electrical" value={electrical} />}
+                  {waterSource && <DetailItem icon={FiDroplet} label="Water" value={waterSource} />}
+                  {accessibilityFeatures && <DetailItem icon={FiShield} label="Accessibility" value={accessibilityFeatures} />}
+                </div>
+              </section>
             )}
 
-            {/* Outdoor & Views */}
+            {/* Views & Privacy */}
             {(view || privacy) && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiEye} title="Outdoor & Views">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {view && (
-                      <InfoRow label="View" value={view} icon={FiEye} />
-                    )}
-                    {privacy && (
-                      <InfoRow label="Privacy" value={privacy} icon={FiShield} />
-                    )}
-                  </div>
-                </Section>
-              </div>
+              <section>
+                <h2 className="text-lg font-semibold text-ink mb-4">Views & Privacy</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {view && <DetailItem icon={FiEye} label="View" value={view} />}
+                  {privacy && <DetailItem icon={FiShield} label="Privacy" value={privacy} />}
+                </div>
+              </section>
             )}
 
             {/* Building Rules */}
             {buildingRules && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiShield} title="Building Rules">
-                  <p className="text-ink-muted leading-relaxed whitespace-pre-line">
-                    {buildingRules}
-                  </p>
-                </Section>
-              </div>
+              <section>
+                <h2 className="text-lg font-semibold text-ink mb-3">Building rules</h2>
+                <p className="text-ink-muted leading-relaxed whitespace-pre-line">{buildingRules}</p>
+              </section>
             )}
           </div>
 
           {/* Right Column - Pricing & Map */}
-          <div className="space-y-6">
-            {/* Pricing Details */}
-            {(securityDeposit || tax || maintenanceFee || leaseTerm) && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiDollarSign} title="Pricing Details">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center py-2 border-b border-surface-200">
-                      <span className="text-ink-muted">
-                        {type === "rent" ? "Monthly Rent" : "Sale Price"}
-                      </span>
-                      <span className="font-semibold text-ink">
-                        {formatPrice(price)}
-                      </span>
-                    </div>
-                    {securityDeposit && (
-                      <div className="flex justify-between items-center py-2 border-b border-surface-200">
-                        <span className="text-ink-muted">Security Deposit</span>
-                        <span className="font-medium text-ink">
-                          {formatPrice(securityDeposit)}
-                        </span>
-                      </div>
-                    )}
-                    {maintenanceFee && (
-                      <div className="flex justify-between items-center py-2 border-b border-surface-200">
-                        <span className="text-ink-muted">Maintenance Fee</span>
-                        <span className="font-medium text-ink">
-                          {formatPrice(maintenanceFee)}
-                        </span>
-                      </div>
-                    )}
-                    {tax && (
-                      <div className="flex justify-between items-center py-2 border-b border-surface-200">
-                        <span className="text-ink-muted">Tax</span>
-                        <span className="font-medium text-ink">{tax}%</span>
-                      </div>
-                    )}
-                    {leaseTerm && (
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-ink-muted">Lease Term</span>
-                        <span className="font-medium text-ink">
-                          {getLabelFromValue(LEASE_TERM_OPTIONS, leaseTerm)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </Section>
-              </div>
-            )}
-
-            {/* Map */}
-            {hasCoordinates && (
-              <div className="card-elevated animate-fade-in-up">
-                <Section icon={FiMapPin} title="Location">
-                  <div className="h-[300px] lg:h-[350px] rounded-xl overflow-hidden -mx-1">
-                    <MapContainer
-                      center={[+geolocation.lat, +geolocation.lng]}
-                      zoom={15}
-                      scrollWheelZoom={false}
-                      style={{ height: "100%", width: "100%" }}
-                    >
-                      <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      />
-                      <Marker position={[+geolocation.lat, +geolocation.lng]}>
-                        <Popup>
-                          <div className="text-center">
-                            <p className="font-semibold">{name}</p>
-                            <p className="text-sm text-gray-600">{formatFullAddress()}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    </MapContainer>
-                  </div>
-                  <p className="text-sm text-ink-muted mt-3 text-center">
-                    {formatFullAddress()}
-                  </p>
-                </Section>
-              </div>
-            )}
-
-            {/* Property Snapshot (Mobile Summary) */}
-            <div className="card-elevated animate-fade-in-up lg:hidden">
-              <h3 className="text-lg font-semibold text-ink mb-4">Quick Summary</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-ink-muted">Type</span>
-                  <p className="font-medium text-ink capitalize">{type}</p>
+          <div className="lg:col-span-2 space-y-6">
+            {/* Pricing Card */}
+            <div className="bg-surface-50 rounded-2xl p-5 border border-surface-200 sticky top-20">
+              <h3 className="text-lg font-semibold text-ink mb-4">Pricing</h3>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center pb-3 border-b border-surface-200">
+                  <span className="text-ink-muted">{type === "rent" ? "Monthly rent" : "Price"}</span>
+                  <span className="text-xl font-bold text-ink">{formatPrice(price)}</span>
                 </div>
-                {propertyType && (
-                  <div>
-                    <span className="text-ink-muted">Property</span>
-                    <p className="font-medium text-ink">
-                      {getLabelFromValue(PROPERTY_TYPES, propertyType)}
-                    </p>
+
+                {securityDeposit && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-ink-muted text-sm">Security deposit</span>
+                    <span className="font-medium text-ink">{formatPrice(securityDeposit)}</span>
                   </div>
                 )}
-                <div>
-                  <span className="text-ink-muted">Bedrooms</span>
-                  <p className="font-medium text-ink">{bedrooms}</p>
-                </div>
-                <div>
-                  <span className="text-ink-muted">Bathrooms</span>
-                  <p className="font-medium text-ink">{bathrooms}</p>
-                </div>
+
+                {maintenanceFee && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-ink-muted text-sm">Maintenance fee</span>
+                    <span className="font-medium text-ink">{formatPrice(maintenanceFee)}</span>
+                  </div>
+                )}
+
+                {tax && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-ink-muted text-sm">Tax</span>
+                    <span className="font-medium text-ink">{tax}%</span>
+                  </div>
+                )}
+
+                {leaseTerm && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-ink-muted text-sm">Lease term</span>
+                    <span className="font-medium text-ink">{getLabelFromValue(LEASE_TERM_OPTIONS, leaseTerm)}</span>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Location Card */}
+            {hasCoordinates && (
+              <div className="bg-surface-50 rounded-2xl overflow-hidden border border-surface-200">
+                <div className="p-4 border-b border-surface-200">
+                  <h3 className="text-lg font-semibold text-ink flex items-center gap-2">
+                    <FiMapPin className="w-5 h-5" />
+                    Location
+                  </h3>
+                </div>
+                <div className="h-[280px]">
+                  <MapContainer
+                    center={[+geolocation.lat, +geolocation.lng]}
+                    zoom={15}
+                    scrollWheelZoom={false}
+                    style={{ height: "100%", width: "100%" }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker position={[+geolocation.lat, +geolocation.lng]}>
+                      <Popup>
+                        <div className="text-center p-1">
+                          <p className="font-semibold text-sm">{name}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </MapContainer>
+                </div>
+                <div className="p-4 bg-white">
+                  <p className="text-sm text-ink-muted">{formatFullAddress()}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
