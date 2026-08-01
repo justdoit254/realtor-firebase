@@ -10,7 +10,8 @@ import { ToastContainer } from "react-toastify";
 import PrivateRoute from "./components/PrivateRoute";
 import CreateListing from "./pages/CreateListing";
 import EditListing from "./pages/EditListing";
-import Listing from "./pages/Listing";
+// import Listing from "./pages/Listing"; // Old listing page - replaced by SingleListing
+import SingleListing from "./pages/SingleListing";
 import Category from "./pages/Category";
 import ScrollToTop from "./components/ScrollToTop";
 
@@ -30,9 +31,10 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/offers" element={<Offers />} />
           <Route path="/category/:categoryName" element={<Category />} />
+          {/* Using SingleListing instead of old Listing component */}
           <Route
             path="/category/:categoryName/:listingId"
-            element={<Listing />}
+            element={<SingleListing />}
           />
           <Route path="/create-listing" element={<PrivateRoute />}>
             <Route path="/create-listing" element={<CreateListing />} />

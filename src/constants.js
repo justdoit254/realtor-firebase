@@ -71,7 +71,7 @@ export const INITIAL_FORM_DATA = {
 export const REQUIRED_FIELDS = [
   { key: 'type', validate: (v) => v && v.trim() !== '' },
   { key: 'name', validate: (v) => v && v.trim().length >= 3 && v.trim().length <= 100 },
-  { key: 'description', validate: (v) => v && v.trim().length >= 10 && v.trim().length <= 500 },
+  { key: 'description', validate: (v) => v && v.trim().length >= 10 && v.trim().length <= 1000 },
   { key: 'streetAddress', validate: (v) => v && v.trim().length >= 3 && v.trim().length <= 100 },
   { key: 'city', validate: (v) => v && v.trim().length >= 2 && v.trim().length <= 20 },
   { key: 'state', validate: (v) => v && v.trim().length >= 2 && v.trim().length <= 20 },
